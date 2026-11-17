@@ -35,6 +35,7 @@ import { stageSignals } from "./signal-tracker.js";
 import { getWeightsSummary } from "./signal-weights.js";
 import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
 import { appendDecision } from "./decision-log.js";
+import { startDashboardServer } from "./server.js";
 
 import { REPO_ROOT, repoPath } from "./repo-root.js";
 
@@ -190,16 +191,22 @@ async function executeManagementActions(actionPositions, actionMap, { liveMessag
 
   // INSTRUCTION positions need the LLM to evaluate the free-text condition.
   if (instructionPositions.length > 0) {
-    log("cron", `Management: ${instructionPositions.length} instruction position(s) — invoking LLM [model: ${config.llm.managementModel}]`);
-    const actionBlocks = instructionPositions.map((p) => [
-      `POSITION: ${p.pair} (${p.position})`,
-      `  pool: ${p.pool}`,
-      `  pnl_pct: ${p.pnl_pct}% | unclaimed_fees: ${cur}${p.unclaimed_fees_usd} | value: ${cur}${p.total_value_usd} | fee_per_tvl_24h: ${p.fee_per_tvl_24h ?? "?"}%`,
-      `  bins: lower=${p.lower_bin} upper=${p.upper_bin} active=${p.active_bin} | oor_minutes: ${p.minutes_out_of_range ?? 0}`,
-      `  instruction: "${p.instruction}"`,
-    ].join("\n")).join("\n\n");
+    if (config.llm?.enabled === false) {
+      log("cron", `Management: ${instructionPositions.length} instruction position(s) — skipping LLM evaluation (Mechanical Mode)`);
+      for (const p of instructionPositions) {
+        lines.push(`${p.pair}: HOLD (instruction evaluation skipped — LLM disabled)`);
+      }
+    } else {
+      log("cron", `Management: ${instructionPositions.length} instruction position(s) — invoking LLM [model: ${config.llm.managementModel}]`);
+      const actionBlocks = instructionPositions.map((p) => [
+        `POSITION: ${p.pair} (${p.position})`,
+        `  pool: ${p.pool}`,
+        `  pnl_pct: ${p.pnl_pct}% | unclaimed_fees: ${cur}${p.unclaimed_fees_usd} | value: ${cur}${p.total_value_usd} | fee_per_tvl_24h: ${p.fee_per_tvl_24h ?? "?"}%`,
+        `  bins: lower=${p.lower_bin} upper=${p.upper_bin} active=${p.active_bin} | oor_minutes: ${p.minutes_out_of_range ?? 0}`,
+        `  instruction: "${p.instruction}"`,
+      ].join("\n")).join("\n\n");
 
-    const { content } = await agentLoop(`
+      const { content } = await agentLoop(`
 INSTRUCTION EVALUATION — ${instructionPositions.length} position(s)
 
 ${actionBlocks}
@@ -209,11 +216,12 @@ For each position, evaluate the instruction condition against the live data:
 - If NOT met → HOLD, do nothing.
 
 After evaluating, write a brief one-line result per position.
-    `, config.llm.maxSteps, [], "MANAGER", config.llm.managementModel, 2048, {
-      onToolStart: async ({ name }) => { await liveMessage?.toolStart(name); },
-      onToolFinish: async ({ name, result, success }) => { await liveMessage?.toolFinish(name, result, success); },
-    });
-    if (content) lines.push(content);
+      `, config.llm.maxSteps, [], "MANAGER", config.llm.managementModel, 2048, {
+        onToolStart: async ({ name }) => { await liveMessage?.toolStart(name); },
+        onToolFinish: async ({ name, result, success }) => { await liveMessage?.toolFinish(name, result, success); },
+      });
+      if (content) lines.push(content);
+    }
   }
 
   return lines.join("\n");
@@ -408,7 +416,11 @@ export async function runScreeningCycle({ silent = false } = {}) {
     liveMessage = await createLiveMessage("🔍 Screening Cycle", "Scanning candidates...");
   }
   timers.screeningLastRun = Date.now();
-  log("cron", `Starting screening cycle [model: ${config.llm.screeningModel}]`);
+  if (config.llm?.enabled === false) {
+    log("cron", `Starting screening cycle [engine: ⚡ MECHANICAL (NO LLM)]`);
+  } else {
+    log("cron", `Starting screening cycle [model: ${config.llm.screeningModel}]`);
+  }
   try {
     // Reuse pre-fetched balance — no extra RPC call needed
     const currentBalance = preBalance;
@@ -605,7 +617,58 @@ export async function runScreeningCycle({ silent = false } = {}) {
 
     let deployAttempted = false;
     let deploySucceeded = false;
-    const { content } = await agentLoop(`
+    let content = "";
+
+    if (config.llm?.enabled === false) {
+      log("screening", "⚡ Mechanical Engine (No LLM): evaluating top candidates directly");
+      if (passing.length === 0) {
+        content = "⛔ NO DEPLOY\n\nCycle finished with no candidates meeting filter criteria (Mechanical Mode).";
+      } else {
+        const best = passing[0];
+        const pool = best.pool;
+        const volatility = pool.volatility || 2.5;
+        const minBins = config.strategy?.minBinsBelow || 35;
+        const maxBins = config.strategy?.maxBinsBelow || 69;
+        const rawBins = Math.round(minBins + (volatility / 5) * (maxBins - minBins));
+        const binsBelow = Math.max(minBins, Math.min(maxBins, rawBins));
+
+        log("screening", `⚡ Mechanical Pick: ${pool.name} (${pool.pool}) | Score: ${pool.score || pool.degenScore || "N/A"} | Volatility: ${volatility} | Bins below: ${binsBelow}`);
+
+        await liveMessage?.toolStart("deploy_position");
+        deployAttempted = true;
+        const deployArgs = {
+          pool_address: pool.pool,
+          pool_name: pool.name,
+          amount_y: deployAmount,
+          amount_sol: deployAmount,
+          amount_x: 0,
+          strategy: config.strategy?.strategy || "spot",
+          bins_below: binsBelow,
+          bins_above: 0,
+          volatility: volatility
+        };
+
+        const deployRes = await executeTool("deploy_position", deployArgs).catch(e => ({ error: e.message, success: false }));
+        deploySucceeded = Boolean(deployRes && deployRes.success !== false && !deployRes.error && !deployRes.blocked);
+        await liveMessage?.toolFinish("deploy_position", deployRes, deploySucceeded);
+
+        if (deploySucceeded) {
+          content = [
+            `🚀 DEPLOYED (Mechanical Engine)`,
+            ``,
+            `${pool.name}`,
+            `${pool.pool}`,
+            ``,
+            `◎ ${deployAmount} SOL | ${config.strategy?.strategy || "spot"} | bins_below: ${binsBelow}`,
+            `TVL: $${pool.tvl ?? pool.active_tvl ?? 0} | Vol: $${pool.volume_window ?? 0} | Fee/TVL: ${pool.fee_active_tvl_ratio ?? 0}%`,
+            `Score: ${pool.score || pool.degenScore || "N/A"} | Volatility: ${volatility}`,
+          ].join("\n");
+        } else {
+          content = `⛔ NO DEPLOY\n\nMechanical deploy failed for ${pool.name}: ${deployRes?.error || deployRes?.reason || "Unknown error"}`;
+        }
+      }
+    } else {
+      const loopRes = await agentLoop(`
 SCREENING CYCLE
 ${strategyBlock}
 Positions: ${prePositions.total_positions}/${config.risk.maxPositions} | SOL: ${currentBalance.sol.toFixed(3)} | Deploy: ${deployAmount} SOL
@@ -683,6 +746,8 @@ IMPORTANT:
           await liveMessage?.toolFinish(name, result, success);
         },
       });
+      content = loopRes.content;
+    }
     const funnelAppend = buildGmgnFunnelReport(gmgnStageCounts, gmgnAllFiltered, { fromStage: 2 });
     screenReport = funnelAppend ? `${content}\n\n─────────────\n${funnelAppend}` : content;
     if (/⛔\s*NO DEPLOY/i.test(content)) {
@@ -731,6 +796,10 @@ export function startCronJobs() {
     _managementBusy = true;
     log("cron", "Starting health check");
     try {
+      if (config.llm?.enabled === false) {
+        log("cron", "Health check (Mechanical Mode): portfolio monitoring active, LLM disabled.");
+        return;
+      }
       await agentLoop(`
 HEALTH CHECK
 
@@ -1914,6 +1983,38 @@ function fmtPct(value) {
 // Register restarter — when update_config changes intervals, running cron jobs get replaced
 registerCronRestarter(() => { if (cronStarted) startCronJobs(); });
 
+if (isMain) {
+  try {
+    startDashboardServer({
+      runManagement: () => runManagementCycle({ silent: false }),
+      runScreening: () => runScreeningCycle({ silent: false }),
+      getTimers: () => ({
+        managementLastRun: timers.managementLastRun,
+        screeningLastRun: timers.screeningLastRun,
+        managementIntervalMin: config.schedule?.managementIntervalMin || 2,
+        screeningIntervalMin: config.schedule?.screeningIntervalMin || 5,
+      }),
+      getCronStatus: () => cronStarted,
+      toggleCron: (action) => {
+        if (action === "pause") {
+          cronStarted = false;
+          stopCronJobs();
+          return "paused";
+        } else if (action === "resume") {
+          cronStarted = true;
+          timers.managementLastRun = Date.now();
+          timers.screeningLastRun = Date.now();
+          startCronJobs();
+          return "resumed";
+        }
+        return cronStarted ? "running" : "idle";
+      },
+    });
+  } catch (err) {
+    log("startup_error", `Failed to start dashboard server: ${err.message}`);
+  }
+}
+
 if (isMain && isTTY) {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -2208,6 +2309,9 @@ Focus on: hold duration, entry/exit timing, what win rates look like, whether sc
 } else if (isMain) {
   // Non-TTY: start immediately
   log("startup", "Non-TTY mode — starting cron cycles immediately.");
+  cronStarted = true;
+  timers.managementLastRun = Date.now();
+  timers.screeningLastRun = Date.now();
   startCronJobs();
   maybeRunMissedBriefing().catch(() => { });
   startPolling(telegramHandler);

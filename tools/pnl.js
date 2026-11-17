@@ -218,6 +218,8 @@ function buildPosition(f, prices, solUsd, meteora, solMode) {
     lower_bin:          f.lower ?? tracked?.bin_range?.min ?? null,
     upper_bin:          f.upper ?? tracked?.bin_range?.max ?? null,
     active_bin:         f.active ?? tracked?.bin_range?.active ?? null,
+    bin_step:           tracked?.bin_step ?? f.binStep ?? null,
+    binStep:            tracked?.bin_step ?? f.binStep ?? null,
     in_range:           inRange,
     unclaimed_fees_usd: round(solMode ? claimableSol : claimableUsd),
     unclaimed_fees_true_usd: round(claimableUsd),

@@ -1,0 +1,1601 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Merione — Autonomous DLMM LP Engine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            surface: {
+              base: '#090a0f',
+              card: '#11131a',
+              subtle: '#161922',
+              hover: '#1c202c',
+              border: '#1f2432',
+              borderLight: '#2b3246'
+            },
+            accent: {
+              blue: '#3b82f6',
+              cyan: '#06b6d4',
+              emerald: '#10b981',
+              rose: '#f43f5e',
+              amber: '#f59e0b'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    :root {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color-scheme: dark;
+    }
+    body {
+      background-color: #090a0f;
+      color: #e2e8f0;
+      -webkit-font-smoothing: antialiased;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-feature-settings: "tnum" 1, "zero" 1;
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #090a0f; }
+    ::-webkit-scrollbar-thumb { background: #1f2432; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #333d54; }
+  </style>
+</head>
+<body class="min-h-screen flex selection:bg-blue-600 selection:text-white">
+
+  <!-- Toast Notification Stack -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
+
+  <!-- Modal Overlay -->
+  <div id="modal-container"></div>
+
+  <!-- Mobile Sidebar Backdrop -->
+  <div id="sidebar-backdrop" onclick="toggleMobileSidebar(false)" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden md:hidden"></div>
+
+  <!-- ─── SIDEBAR NAVIGATION ─── -->
+  <aside id="sidebar-drawer" class="fixed md:static inset-y-0 left-0 z-50 w-64 bg-surface-card border-r border-surface-border flex flex-col justify-between shrink-0 transform -translate-x-full md:translate-x-0 transition-transform duration-200 ease-in-out">
+    
+    <!-- Top Brand & Nav -->
+    <div class="flex flex-col">
+      <!-- Logo Header -->
+      <div class="h-16 px-5 border-b border-surface-border flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-surface-subtle border border-surface-border flex items-center justify-center font-mono font-bold text-xs text-white shadow-sm">
+            M
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-sm font-semibold tracking-tight text-white">Merione</span>
+              <span class="text-[9px] font-mono uppercase px-1 py-0.2 rounded bg-surface-subtle text-slate-400 border border-surface-border">DLMM</span>
+            </div>
+            <span class="text-[10px] text-slate-500 font-mono block -mt-0.5">Autonomous Agent</span>
+          </div>
+        </div>
+        <!-- Mobile close button -->
+        <button onclick="toggleMobileSidebar(false)" class="md:hidden text-slate-400 hover:text-white p-1 rounded-md">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="p-3 space-y-1">
+        <button onclick="switchTab('overview')" id="tab-btn-overview" class="tab-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition text-white bg-surface-subtle border border-surface-border">
+          <div class="flex items-center gap-3">
+            <i data-lucide="layout-grid" class="w-4 h-4 text-slate-300"></i>
+            <span>Overview</span>
+          </div>
+        </button>
+
+        <button onclick="switchTab('positions')" id="tab-btn-positions" class="tab-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition text-slate-400 hover:text-slate-200 hover:bg-surface-subtle">
+          <div class="flex items-center gap-3">
+            <i data-lucide="layers" class="w-4 h-4 text-slate-400"></i>
+            <span>Posisi LP</span>
+          </div>
+          <span id="badge-open-positions" class="px-1.5 py-0.2 rounded font-mono text-[10px] bg-surface-base text-slate-300 border border-surface-border">0</span>
+        </button>
+
+        <button onclick="switchTab('screening')" id="tab-btn-screening" class="tab-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition text-slate-400 hover:text-slate-200 hover:bg-surface-subtle">
+          <div class="flex items-center gap-3">
+            <i data-lucide="crosshair" class="w-4 h-4 text-slate-400"></i>
+            <span>Radar Screening</span>
+          </div>
+        </button>
+
+        <button onclick="switchTab('settings')" id="tab-btn-settings" class="tab-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition text-slate-400 hover:text-slate-200 hover:bg-surface-subtle">
+          <div class="flex items-center gap-3">
+            <i data-lucide="sliders-horizontal" class="w-4 h-4 text-slate-400"></i>
+            <span>Setelan & Mode</span>
+          </div>
+          <span id="badge-settings-mode" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+        </button>
+
+        <button onclick="switchTab('logs')" id="tab-btn-logs" class="tab-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition text-slate-400 hover:text-slate-200 hover:bg-surface-subtle">
+          <div class="flex items-center gap-3">
+            <i data-lucide="terminal" class="w-4 h-4 text-slate-400"></i>
+            <span>Konsol Log</span>
+          </div>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Bottom Sidebar Widget -->
+    <div class="p-3 border-t border-surface-border space-y-2.5">
+      <!-- Mode Badge Card -->
+      <div class="p-2.5 rounded-lg bg-surface-base border border-surface-border space-y-1.5">
+        <div class="flex items-center justify-between text-[11px]">
+          <span class="text-slate-500 font-mono uppercase tracking-wider text-[10px]">Status Mode</span>
+          <button onclick="switchTab('settings')" class="text-blue-400 hover:underline text-[10px] font-medium">Ubah</button>
+        </div>
+        <button id="header-mode-badge" onclick="switchTab('settings')" class="w-full flex items-center justify-between px-2 py-1 rounded border text-[11px] font-medium transition bg-surface-subtle border-surface-border text-slate-300">
+          <span class="flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+            <span id="header-mode-text" class="font-mono">DRY RUN</span>
+          </span>
+          <i data-lucide="chevron-right" class="w-3 h-3 text-slate-500"></i>
+        </button>
+      </div>
+
+      <!-- Cron State & Quick Info -->
+      <div class="px-2.5 py-1.5 flex items-center justify-between text-xs font-mono">
+        <span id="cron-status-text" class="text-[11px] text-emerald-400 flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Cron Aktif
+        </span>
+        <button id="btn-toggle-cron" onclick="toggleCronState()" class="text-[10px] text-slate-400 hover:text-slate-200 underline">
+          <span id="text-toggle-cron">Pause</span>
+        </button>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ─── MAIN CONTENT AREA ─── -->
+  <div class="flex-1 min-w-0 flex flex-col bg-surface-base min-h-screen">
+    
+    <!-- Top Bar inside Main -->
+    <header class="h-16 border-b border-surface-border bg-surface-card/90 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-6 flex items-center justify-between gap-3">
+      
+      <!-- Mobile hamburger & breadcrumb -->
+      <div class="flex items-center gap-3">
+        <button onclick="toggleMobileSidebar(true)" class="md:hidden p-1.5 rounded-lg bg-surface-subtle border border-surface-border text-slate-300 hover:text-white">
+          <i data-lucide="menu" class="w-4 h-4"></i>
+        </button>
+        <div class="flex items-center gap-2">
+          <span id="main-view-title" class="text-xs font-semibold uppercase tracking-wider text-slate-200">Overview</span>
+          <span id="header-engine-badge" class="px-2 py-0.5 rounded text-[10px] font-mono border bg-surface-subtle border-surface-border text-slate-300 hidden sm:inline-flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span> LLM AI
+          </span>
+        </div>
+      </div>
+
+      <!-- Wallet & Action Controls -->
+      <div class="flex items-center gap-2">
+        <div class="px-3 py-1.5 rounded-lg bg-surface-base border border-surface-border flex items-center gap-2 text-xs">
+          <div class="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
+          <span id="wallet-balance-sol" class="font-mono font-medium text-white">— SOL</span>
+          <span id="wallet-balance-usd" class="font-mono text-slate-400 text-[11px] hidden sm:inline">(≈ $—)</span>
+        </div>
+
+        <button onclick="triggerScreening()" class="px-2.5 py-1.5 rounded-lg bg-surface-subtle hover:bg-surface-hover border border-surface-border text-slate-200 text-xs font-medium flex items-center gap-1.5 transition active:scale-95" title="Jalankan screening pool">
+          <i data-lucide="radar" class="w-3.5 h-3.5 text-slate-400"></i>
+          <span class="hidden lg:inline">Screen</span>
+        </button>
+
+        <button onclick="triggerManagement()" class="px-2.5 py-1.5 rounded-lg bg-surface-subtle hover:bg-surface-hover border border-surface-border text-slate-200 text-xs font-medium flex items-center gap-1.5 transition active:scale-95" title="Jalankan management posisi">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-slate-400"></i>
+          <span class="hidden lg:inline">Manage</span>
+        </button>
+      </div>
+
+    </header>
+
+    <!-- Main Views Container -->
+    <main class="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-5">
+
+      <!-- ─── TAB 1: OVERVIEW ─── -->
+      <section id="view-overview" class="tab-content space-y-5">
+        
+        <!-- Key Metrics -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <div class="p-4 rounded-xl bg-surface-card border border-surface-border flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 text-xs">
+              <span class="uppercase tracking-wider font-medium text-[11px]">Kas Wallet</span>
+              <i data-lucide="wallet" class="w-4 h-4 text-slate-500"></i>
+            </div>
+            <div class="mt-2">
+              <div class="text-xl font-semibold font-mono text-white" id="metric-sol-balance">— SOL</div>
+              <div class="text-xs text-slate-400 font-mono mt-0.5" id="metric-sol-usd">≈ $— USD</div>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-xl bg-surface-card border border-surface-border flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 text-xs">
+              <span class="uppercase tracking-wider font-medium text-[11px]">Mode Trading</span>
+              <i data-lucide="shield" class="w-4 h-4 text-slate-500"></i>
+            </div>
+            <div class="mt-2">
+              <div class="text-xl font-semibold font-mono text-amber-400" id="metric-mode-title">DRY RUN</div>
+              <div class="text-xs text-slate-400 mt-0.5 flex items-center justify-between">
+                <span id="metric-mode-desc">Simulasi aman tanpa dana riil</span>
+                <button onclick="switchTab('settings')" class="text-blue-400 hover:text-blue-300 font-medium">Ubah →</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-xl bg-surface-card border border-surface-border flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 text-xs">
+              <span class="uppercase tracking-wider font-medium text-[11px]">Posisi LP Aktif</span>
+              <i data-lucide="layers" class="w-4 h-4 text-slate-500"></i>
+            </div>
+            <div class="mt-2">
+              <div class="text-xl font-semibold font-mono text-white" id="metric-open-count">0 Posisi</div>
+              <div class="text-xs text-slate-400 mt-0.5" id="metric-max-positions">Maksimal 2 slot terisi</div>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-xl bg-surface-card border border-surface-border flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-400 text-xs">
+              <span class="uppercase tracking-wider font-medium text-[11px]">Siklus Otomatis</span>
+              <i data-lucide="clock" class="w-4 h-4 text-slate-500"></i>
+            </div>
+            <div class="mt-2 space-y-1 font-mono text-xs">
+              <div class="flex justify-between items-center">
+                <span class="text-slate-400">Manage:</span>
+                <span id="timer-manage" class="font-medium text-slate-200">—</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-slate-400">Screening:</span>
+                <span id="timer-screen" class="font-medium text-slate-200">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Open Positions Preview -->
+        <div class="rounded-xl bg-surface-card border border-surface-border overflow-hidden">
+          <div class="p-4 border-b border-surface-border flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="layers" class="w-4 h-4 text-slate-400"></i>
+              <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-200">Posisi LP Terbuka</h2>
+            </div>
+            <button onclick="switchTab('positions')" class="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1">
+              Buka Tab Posisi <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <div class="p-4">
+            <div id="overview-positions-list" class="space-y-3">
+              <div class="py-8 text-center text-slate-500 text-xs">Memuat posisi...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Log Stream -->
+        <div class="rounded-xl bg-surface-card border border-surface-border overflow-hidden">
+          <div class="p-4 border-b border-surface-border flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="activity" class="w-4 h-4 text-slate-400"></i>
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-200">Aktivitas Terkini</h3>
+            </div>
+            <button onclick="switchTab('logs')" class="text-xs text-blue-400 hover:text-blue-300 font-medium">Buka Konsol →</button>
+          </div>
+          <div class="p-4">
+            <div id="overview-recent-logs" class="space-y-1.5 font-mono text-[11px] max-h-44 overflow-y-auto pr-1 text-slate-300">
+              <div class="text-slate-500">Memuat log...</div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ─── TAB 2: POSITIONS ─── -->
+      <section id="view-positions" class="tab-content hidden space-y-5">
+        
+        <!-- Simulation Stats Banner -->
+        <div id="paper-stats-banner" class="hidden p-4 rounded-xl bg-surface-subtle border border-surface-border space-y-3">
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pb-2 border-b border-surface-border">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-200">Simulasi Paper Trading (Warlock Engine)</h3>
+            </div>
+            <button onclick="resetPaperSimulation()" class="px-2.5 py-1 rounded bg-surface-base hover:bg-surface-hover border border-surface-border text-slate-300 text-xs font-medium flex items-center gap-1 active:scale-95 transition">
+              <i data-lucide="rotate-ccw" class="w-3 h-3 text-slate-400"></i> Reset Simulasi
+            </button>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div class="p-3 rounded-lg bg-surface-base border border-surface-border">
+              <span class="text-[10px] text-slate-400 block uppercase tracking-wider font-medium">Total PnL Simulasi</span>
+              <span id="paper-stat-pnl" class="text-sm font-semibold font-mono text-emerald-400">+$0.00</span>
+            </div>
+            <div class="p-3 rounded-lg bg-surface-base border border-surface-border">
+              <span class="text-[10px] text-slate-400 block uppercase tracking-wider font-medium">Total Fee Terkumpul</span>
+              <span id="paper-stat-fees" class="text-sm font-semibold font-mono text-slate-200">+$0.00</span>
+            </div>
+            <div class="p-3 rounded-lg bg-surface-base border border-surface-border">
+              <span class="text-[10px] text-slate-400 block uppercase tracking-wider font-medium">Win Rate</span>
+              <span id="paper-stat-winrate" class="text-sm font-semibold font-mono text-slate-200">0% (0 trades)</span>
+            </div>
+            <div class="p-3 rounded-lg bg-surface-base border border-surface-border">
+              <span class="text-[10px] text-slate-400 block uppercase tracking-wider font-medium">Saldo Virtual SOL</span>
+              <span id="paper-stat-balance" class="text-sm font-semibold font-mono text-amber-300">10.00 SOL</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls & Subtabs -->
+        <div class="flex items-center justify-between">
+          <div class="flex gap-1.5 p-1 rounded-lg bg-surface-card border border-surface-border">
+            <button onclick="switchPositionsSub('open')" id="subtab-btn-open" class="px-3 py-1 rounded text-xs font-medium bg-surface-subtle text-white border border-surface-border">
+              Posisi Aktif (<span id="count-open-sub">0</span>)
+            </button>
+            <button onclick="switchPositionsSub('history')" id="subtab-btn-history" class="px-3 py-1 rounded text-xs font-medium text-slate-400 hover:text-slate-200">
+              Riwayat Selesai (<span id="count-history-sub">0</span>)
+            </button>
+          </div>
+          <button onclick="fetchPositions()" class="px-2.5 py-1.5 rounded-lg bg-surface-card hover:bg-surface-subtle border border-surface-border text-xs text-slate-300 font-medium flex items-center gap-1.5 transition">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-slate-400"></i> Refresh
+          </button>
+        </div>
+
+        <div id="positions-open-container" class="space-y-3">
+          <div class="py-12 text-center text-slate-500 text-xs">Memuat posisi aktif...</div>
+        </div>
+
+        <div id="positions-history-container" class="hidden space-y-2.5">
+          <div class="py-12 text-center text-slate-500 text-xs">Memuat riwayat...</div>
+        </div>
+
+      </section>
+
+      <!-- ─── TAB 3: SCREENING ─── -->
+      <section id="view-screening" class="tab-content hidden space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-4 rounded-xl bg-surface-card border border-surface-border">
+          <div>
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-200">Radar Screening Pool DLMM</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Pool Meteora yang memenuhi kriteria filter trending, volume, dan rasio fee/TVL.</p>
+          </div>
+          <button onclick="triggerScreening()" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-medium text-xs flex items-center gap-1.5 shadow-sm transition">
+            <i data-lucide="radar" class="w-3.5 h-3.5"></i> Scan Sekarang
+          </button>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-surface-border bg-surface-card">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-surface-base text-[11px] uppercase tracking-wider font-medium text-slate-400 border-b border-surface-border">
+              <tr>
+                <th class="p-3">Pool</th>
+                <th class="p-3">Degen Score</th>
+                <th class="p-3">TVL Pool</th>
+                <th class="p-3">Volume 24h</th>
+                <th class="p-3">Fee / TVL</th>
+                <th class="p-3">Bin Step</th>
+                <th class="p-3 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="screening-table-body" class="divide-y divide-surface-border font-mono">
+              <tr><td colspan="7" class="p-6 text-center text-slate-500 font-sans">Memuat kandidat pool...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─── TAB 4: SETTINGS ─── -->
+      <section id="view-settings" class="tab-content hidden space-y-5">
+
+        <!-- Trading Mode Switcher -->
+        <div class="p-5 rounded-xl bg-surface-card border border-surface-border space-y-4">
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pb-3 border-b border-surface-border">
+            <div>
+              <h3 class="text-sm font-semibold text-white">Mode Eksekusi Bot</h3>
+              <p class="text-xs text-slate-400 mt-0.5">Tentukan apakah transaksi dikirim nyata ke on-chain Solana atau melalui simulator paper trading.</p>
+            </div>
+            <div id="settings-current-mode-badge" class="px-2.5 py-1 rounded text-xs font-mono border inline-flex items-center gap-1.5">
+              <!-- Dynamic Mode Pill -->
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <label class="relative flex flex-col p-4 rounded-xl border cursor-pointer transition" id="card-mode-dryrun">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <input type="radio" name="trading_mode" value="dryrun" id="radio-dryrun" onchange="onModeRadioChange(true)" class="w-4 h-4 text-amber-500">
+                  <span class="font-semibold text-sm text-amber-300">DRY RUN (Mode Simulasi)</span>
+                </div>
+                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-base text-amber-400 border border-surface-border">Zero Risk</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+                Bot memindai dan membuka posisi simulasi dengan kalkulasi fee dan PnL riil tanpa mendebit saldo dompet nyata.
+              </p>
+            </label>
+
+            <label class="relative flex flex-col p-4 rounded-xl border cursor-pointer transition" id="card-mode-live">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <input type="radio" name="trading_mode" value="live" id="radio-live" onchange="onModeRadioChange(false)" class="w-4 h-4 text-rose-500">
+                  <span class="font-semibold text-sm text-rose-400">LIVE TRADING (Solana Mainnet)</span>
+                </div>
+                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-base text-rose-400 border border-surface-border">Real Funds</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+                Bot menandatangani dan menyiarkan transaksi likuiditas langsung ke on-chain Meteora DLMM dengan SOL riil.
+              </p>
+            </label>
+          </div>
+        </div>
+
+        <!-- Decision Engine: LLM vs Mechanical -->
+        <div class="p-5 rounded-xl bg-surface-card border border-surface-border space-y-4">
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pb-3 border-b border-surface-border">
+            <div>
+              <h3 class="text-sm font-semibold text-white">Mesin Pengambil Keputusan (Decision Engine)</h3>
+              <p class="text-xs text-slate-400 mt-0.5">Pilih apakah seleksi pool entry menggunakan penalaran AI (LLM) atau eksekusi mekanikal otomatis tanpa LLM.</p>
+            </div>
+            <div id="settings-current-engine-badge" class="px-2.5 py-1 rounded text-xs font-mono border inline-flex items-center gap-1.5">
+              <!-- Dynamic Engine Pill -->
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <label class="relative flex flex-col p-4 rounded-xl border cursor-pointer transition" id="card-engine-llm">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <input type="radio" name="engine_mode" value="llm" id="radio-engine-llm" onchange="onEngineRadioChange(true)" class="w-4 h-4 text-blue-500">
+                  <span class="font-semibold text-sm text-blue-300">🧠 LLM Reasoning (AI Agent)</span>
+                </div>
+                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-base text-blue-400 border border-surface-border">AI Brain</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+                Menggunakan LLM untuk menganalisis narasi token, memori historis, dan smart wallet whale sebelum memutuskan entry posisi LP.
+              </p>
+            </label>
+
+            <label class="relative flex flex-col p-4 rounded-xl border cursor-pointer transition" id="card-engine-mech">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <input type="radio" name="engine_mode" value="mechanical" id="radio-engine-mech" onchange="onEngineRadioChange(false)" class="w-4 h-4 text-emerald-500">
+                  <span class="font-semibold text-sm text-emerald-300">⚡ Mechanical Engine (No LLM)</span>
+                </div>
+                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-base text-emerald-400 border border-surface-border">$0 Token Cost</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+                Eksekusi instan kandidat ranking #1 berdasarkan Degen Score dan rumus matematika Fee/TVL. Latensi 0 detik, 100% bebas error API atau timeout.
+              </p>
+            </label>
+          </div>
+        </div>
+
+        <!-- Settings Form -->
+        <form id="settings-form" onsubmit="saveSettings(event)" class="space-y-4">
+
+          <!-- Capital & Strategy -->
+          <div class="p-5 rounded-xl bg-surface-card border border-surface-border space-y-4">
+            <div class="flex items-center gap-2 pb-2 border-b border-surface-border">
+              <i data-lucide="coins" class="w-4 h-4 text-slate-400"></i>
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-200">Modal & Strategi DLMM</h4>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs">
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Modal per Posisi (SOL)</label>
+                <input type="number" step="0.01" min="0.05" name="deployAmountSol" id="cfg-deployAmountSol" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                <span class="text-[10px] text-slate-500 mt-1 block">Default: 0.30 SOL</span>
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Maksimal Posisi Terbuka</label>
+                <input type="number" step="1" min="1" max="10" name="maxPositions" id="cfg-maxPositions" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                <span class="text-[10px] text-slate-500 mt-1 block">Slot posisi simultan</span>
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Cadangan Gas SOL (Reserve)</label>
+                <input type="number" step="0.01" min="0.01" name="gasReserve" id="cfg-gasReserve" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                <span class="text-[10px] text-slate-500 mt-1 block">Saldo minimal dompet</span>
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Distribusi Rentang (Strategy)</label>
+                <select name="strategy" id="cfg-strategy" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                  <option value="spot">Spot (Distribusi Rata)</option>
+                  <option value="bid_ask">Bid-Ask (Padat di Ujung)</option>
+                  <option value="curve">Curve (Kurva Konsentrasi)</option>
+                </select>
+                <span class="text-[10px] text-slate-500 mt-1 block">Bentuk curve DLMM</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- TP / SL -->
+          <div class="p-5 rounded-xl bg-surface-card border border-surface-border space-y-4">
+            <div class="flex items-center gap-2 pb-2 border-b border-surface-border">
+              <i data-lucide="trending-up" class="w-4 h-4 text-slate-400"></i>
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-200">Target Profit & Batas Risiko</h4>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs">
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Take Profit Target (%)</label>
+                <input type="number" step="0.5" name="takeProfitPct" id="cfg-takeProfitPct" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-emerald-400 font-mono outline-none">
+                <span class="text-[10px] text-slate-500 mt-1 block">Misal: +8%</span>
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Stop Loss Limit (%)</label>
+                <input type="number" step="0.5" name="stopLossPct" id="cfg-stopLossPct" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-rose-400 font-mono outline-none">
+                <span class="text-[10px] text-slate-500 mt-1 block">Misal: -15%</span>
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Trailing Take Profit</label>
+                <select name="trailingTakeProfit" id="cfg-trailingTakeProfit" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                  <option value="true">Aktif (Trailing ON)</option>
+                  <option value="false">Mati (Trailing OFF)</option>
+                </select>
+                <span class="text-[10px] text-slate-500 mt-1 block">Proteksi retracement puncak</span>
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Trailing Arm / Drop (%)</label>
+                <div class="flex gap-2">
+                  <input type="number" step="0.5" placeholder="Arm %" name="trailingTriggerPct" id="cfg-trailingTriggerPct" class="w-1/2 px-2.5 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                  <input type="number" step="0.5" placeholder="Drop %" name="trailingDropPct" id="cfg-trailingDropPct" class="w-1/2 px-2.5 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                </div>
+                <span class="text-[10px] text-slate-500 mt-1 block">Trigger / Toleransi Drop</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Screening Filters -->
+          <div class="p-5 rounded-xl bg-surface-card border border-surface-border space-y-4">
+            <div class="flex items-center gap-2 pb-2 border-b border-surface-border">
+              <i data-lucide="filter" class="w-4 h-4 text-slate-400"></i>
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-200">Parameter Filter Screening</h4>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs">
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Minimal TVL ($)</label>
+                <input type="number" name="minTvl" id="cfg-minTvl" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Maksimal TVL ($)</label>
+                <input type="number" name="maxTvl" id="cfg-maxTvl" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Minimal Volume 24h ($)</label>
+                <input type="number" name="minVolume" id="cfg-minVolume" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Min Fee / TVL Ratio (%)</label>
+                <input type="number" step="0.01" name="minFeeActiveTvlRatio" id="cfg-minFeeActiveTvlRatio" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Minimal Organic Score</label>
+                <input type="number" name="minOrganic" id="cfg-minOrganic" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Minimal Holders</label>
+                <input type="number" name="minHolders" id="cfg-minHolders" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Min / Max Bin Step</label>
+                <div class="flex gap-2">
+                  <input type="number" placeholder="Min" name="minBinStep" id="cfg-minBinStep" class="w-1/2 px-2.5 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                  <input type="number" placeholder="Max" name="maxBinStep" id="cfg-maxBinStep" class="w-1/2 px-2.5 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Timeframe Analisis</label>
+                <select name="timeframe" id="cfg-timeframe" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                  <option value="5m">5 Menit (Cepat)</option>
+                  <option value="30m">30 Menit (Standar)</option>
+                  <option value="1h">1 Jam</option>
+                  <option value="24h">24 Jam</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Automation Intervals -->
+          <div class="p-5 rounded-xl bg-surface-card border border-surface-border space-y-4">
+            <div class="flex items-center gap-2 pb-2 border-b border-surface-border">
+              <i data-lucide="clock" class="w-4 h-4 text-slate-400"></i>
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-200">Interval Siklus Otomatis (Menit)</h4>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Interval Management Posisi (menit)</label>
+                <input type="number" min="1" max="60" name="managementIntervalMin" id="cfg-managementIntervalMin" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                <span class="text-[10px] text-slate-500 mt-1 block">Pemantauan PnL & TP/SL posisi</span>
+              </div>
+
+              <div>
+                <label class="block text-slate-400 font-medium mb-1">Interval Screening Pool Baru (menit)</label>
+                <input type="number" min="1" max="120" name="screeningIntervalMin" id="cfg-screeningIntervalMin" class="w-full px-3 py-2 rounded-lg bg-surface-base border border-surface-border focus:border-blue-500 text-white font-mono outline-none">
+                <span class="text-[10px] text-slate-500 mt-1 block">Pencarian kandidat pool baru</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Submit Footer -->
+          <div class="flex flex-col sm:flex-row justify-end items-center gap-2.5 pt-2">
+            <button type="button" onclick="loadSettings()" class="w-full sm:w-auto px-4 py-2 rounded-lg bg-surface-subtle hover:bg-surface-hover border border-surface-border text-slate-300 font-medium text-xs transition">
+              Reset ke Tersimpan
+            </button>
+            <button type="submit" id="btn-save-settings" class="w-full sm:w-auto px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-semibold text-xs flex items-center justify-center gap-2 transition shadow-sm">
+              <i data-lucide="check" class="w-4 h-4"></i>
+              <span>Simpan Semua Setelan</span>
+            </button>
+          </div>
+
+        </form>
+      </section>
+
+      <!-- ─── TAB 5: LOGS ─── -->
+      <section id="view-logs" class="tab-content hidden space-y-4">
+        <div class="flex justify-between items-center p-3 rounded-lg bg-surface-card border border-surface-border text-xs">
+          <div class="flex items-center gap-2 font-mono text-slate-300">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Live Console Stream</span>
+          </div>
+          <button onclick="fetchLogs()" class="px-2.5 py-1 rounded bg-surface-subtle hover:bg-surface-hover border border-surface-border text-slate-300 font-medium flex items-center gap-1 transition">
+            <i data-lucide="refresh-cw" class="w-3 h-3 text-slate-400"></i> Segarkan
+          </button>
+        </div>
+
+        <div class="p-4 rounded-xl bg-surface-base border border-surface-border font-mono text-xs overflow-x-auto min-h-[440px] max-h-[640px] flex flex-col-reverse text-slate-300 space-y-reverse space-y-1" id="full-logs-container">
+          <!-- Live logs -->
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- Script Logic -->
+  <script>
+    let currentMode = 'DRY_RUN';
+    let cronIsRunning = true;
+    let cachedConfig = {};
+    let cachedStatus = {};
+
+    const tabNames = {
+      overview: 'Overview',
+      positions: 'Posisi LP',
+      screening: 'Radar Screening',
+      settings: 'Setelan & Mode',
+      logs: 'Konsol Log'
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      fetchAllData();
+      setInterval(fetchAllData, 4000);
+    });
+
+    function toggleMobileSidebar(open) {
+      const drawer = document.getElementById('sidebar-drawer');
+      const backdrop = document.getElementById('sidebar-backdrop');
+      if (open) {
+        drawer.classList.remove('-translate-x-full');
+        backdrop.classList.remove('hidden');
+      } else {
+        drawer.classList.add('-translate-x-full');
+        backdrop.classList.add('hidden');
+      }
+    }
+
+    async function fetchAllData() {
+      await Promise.allSettled([
+        fetchStatus(),
+        fetchPositions(),
+        fetchLogs()
+      ]);
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(el => {
+        el.className = 'tab-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition text-slate-400 hover:text-slate-200 hover:bg-surface-subtle';
+      });
+
+      const activeView = document.getElementById(`view-${tabId}`);
+      const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+      if (activeView) activeView.classList.remove('hidden');
+      if (activeBtn) {
+        activeBtn.className = 'tab-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition text-white bg-surface-subtle border border-surface-border';
+      }
+
+      const mainTitle = document.getElementById('main-view-title');
+      if (mainTitle && tabNames[tabId]) {
+        mainTitle.innerText = tabNames[tabId];
+      }
+
+      toggleMobileSidebar(false);
+
+      if (tabId === 'settings') loadSettings();
+      if (tabId === 'screening') fetchScreening();
+      lucide.createIcons();
+    }
+
+    function switchPositionsSub(sub) {
+      const openCont = document.getElementById('positions-open-container');
+      const histCont = document.getElementById('positions-history-container');
+      const btnOpen = document.getElementById('subtab-btn-open');
+      const btnHist = document.getElementById('subtab-btn-history');
+
+      if (sub === 'open') {
+        openCont.classList.remove('hidden');
+        histCont.classList.add('hidden');
+        btnOpen.className = 'px-3 py-1 rounded text-xs font-medium bg-surface-subtle text-white border border-surface-border';
+        btnHist.className = 'px-3 py-1 rounded text-xs font-medium text-slate-400 hover:text-slate-200';
+      } else {
+        openCont.classList.add('hidden');
+        histCont.classList.remove('hidden');
+        btnOpen.className = 'px-3 py-1 rounded text-xs font-medium text-slate-400 hover:text-slate-200';
+        btnHist.className = 'px-3 py-1 rounded text-xs font-medium bg-surface-subtle text-white border border-surface-border';
+      }
+      lucide.createIcons();
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        if (!data.ok) return;
+
+        cachedStatus = data;
+        currentMode = data.mode;
+        cronIsRunning = data.cronRunning;
+
+        const modeBadge = document.getElementById('header-mode-badge');
+        const modeText = document.getElementById('header-mode-text');
+        const metricModeTitle = document.getElementById('metric-mode-title');
+        const metricModeDesc = document.getElementById('metric-mode-desc');
+        const badgeSettingsMode = document.getElementById('badge-settings-mode');
+
+        if (data.mode === 'LIVE') {
+          modeBadge.className = 'w-full flex items-center justify-between px-2 py-1 rounded border text-[11px] font-medium transition bg-rose-500/10 text-rose-300 border-rose-500/30';
+          modeBadge.innerHTML = '<span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span><span>LIVE TRADING</span></span><i data-lucide="chevron-right" class="w-3 h-3 text-rose-400"></i>';
+          metricModeTitle.innerText = 'LIVE TRADING';
+          metricModeTitle.className = 'text-xl font-semibold font-mono text-rose-400';
+          metricModeDesc.innerText = 'Eksekusi transaksi nyata di Solana Mainnet';
+          badgeSettingsMode.className = 'w-1.5 h-1.5 rounded-full bg-rose-500';
+        } else {
+          modeBadge.className = 'w-full flex items-center justify-between px-2 py-1 rounded border text-[11px] font-medium transition bg-amber-500/10 text-amber-300 border-amber-500/30';
+          modeBadge.innerHTML = '<span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span><span>DRY RUN</span></span><i data-lucide="chevron-right" class="w-3 h-3 text-amber-400"></i>';
+          metricModeTitle.innerText = 'DRY RUN';
+          metricModeTitle.className = 'text-xl font-semibold font-mono text-amber-400';
+          metricModeDesc.innerText = 'Mode simulasi tanpa dana riil';
+          badgeSettingsMode.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
+        }
+
+        const sol = Number(data.wallet?.sol || 0);
+        const solUsd = Number(data.wallet?.sol_usd || 0);
+        document.getElementById('wallet-balance-sol').innerText = `${sol.toFixed(4)} SOL`;
+        document.getElementById('wallet-balance-usd').innerText = `(≈ $${solUsd.toFixed(2)})`;
+        document.getElementById('metric-sol-balance').innerText = `${sol.toFixed(4)} SOL`;
+        document.getElementById('metric-sol-usd').innerText = `≈ $${solUsd.toFixed(2)} USD`;
+
+        const engineBadge = document.getElementById('header-engine-badge');
+        if (engineBadge) {
+          if (data.enableLlm === false) {
+            engineBadge.className = 'px-2 py-0.5 rounded text-[10px] font-mono border bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hidden sm:inline-flex items-center gap-1';
+            engineBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> ⚡ MEKANIKAL';
+          } else {
+            engineBadge.className = 'px-2 py-0.5 rounded text-[10px] font-mono border bg-blue-500/10 text-blue-300 border-blue-500/30 hidden sm:inline-flex items-center gap-1';
+            engineBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span> 🧠 LLM AI';
+          }
+        }
+
+        const cronStatusText = document.getElementById('cron-status-text');
+        const textToggle = document.getElementById('text-toggle-cron');
+        if (data.cronRunning) {
+          cronStatusText.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Cron Aktif';
+          cronStatusText.className = 'text-[11px] font-mono text-emerald-400 flex items-center gap-1.5';
+          textToggle.innerText = 'Pause';
+        } else {
+          cronStatusText.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Cron Dijeda';
+          cronStatusText.className = 'text-[11px] font-mono text-amber-400 flex items-center gap-1.5';
+          textToggle.innerText = 'Resume';
+        }
+
+        renderTimers(data.timers);
+      } catch (err) {
+        console.error('Fetch status error:', err);
+      }
+    }
+
+    function renderTimers(timers) {
+      if (!timers) return;
+      const now = Date.now();
+      const mgmtNext = timers.managementLastRun ? Math.max(0, (timers.managementLastRun + timers.managementIntervalMin * 60000) - now) : 0;
+      const scrnNext = timers.screeningLastRun ? Math.max(0, (timers.screeningLastRun + timers.screeningIntervalMin * 60000) - now) : 0;
+
+      document.getElementById('timer-manage').innerText = formatRemaining(mgmtNext);
+      document.getElementById('timer-screen').innerText = formatRemaining(scrnNext);
+    }
+
+    function formatRemaining(ms) {
+      if (ms <= 0) return 'Ready';
+      const sec = Math.floor(ms / 1000);
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${m}m ${s}s`;
+    }
+
+    async function fetchPositions() {
+      try {
+        const res = await fetch('/api/positions');
+        const data = await res.json();
+        if (!data.ok) return;
+
+        const open = data.open || [];
+        const history = data.history || [];
+
+        document.getElementById('badge-open-positions').innerText = open.length;
+        document.getElementById('metric-open-count').innerText = `${open.length} Posisi`;
+        document.getElementById('count-open-sub').innerText = open.length;
+        document.getElementById('count-history-sub').innerText = history.length;
+
+        const paperBanner = document.getElementById('paper-stats-banner');
+        if (data.dryRun) {
+          paperBanner.classList.remove('hidden');
+          const stats = data.stats || {};
+          const pnlSol = Number(stats.totalNetPnlSol || 0);
+          const pnlUsd = Number(stats.totalNetPnlUsd || 0);
+          const feesSol = Number(stats.totalFeesSol || 0);
+          const feesUsd = Number(stats.totalFeesUsd || 0);
+          const winRate = Number(stats.winRatePct || 0);
+          const trades = Number(stats.totalTrades || 0);
+
+          const pnlEl = document.getElementById('paper-stat-pnl');
+          pnlEl.innerText = `${pnlUsd >= 0 ? '+' : ''}$${pnlUsd.toFixed(2)} (${pnlSol >= 0 ? '+' : ''}${pnlSol.toFixed(4)} SOL)`;
+          pnlEl.className = `text-sm font-semibold font-mono ${pnlUsd >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+          document.getElementById('paper-stat-fees').innerText = `+$${feesUsd.toFixed(2)} (+${feesSol.toFixed(4)} SOL)`;
+          document.getElementById('paper-stat-winrate').innerText = `${winRate.toFixed(1)}% (${trades} trades)`;
+
+          if (data.virtualWallet) {
+            const curSol = Number(data.virtualWallet.currentSol ?? 10);
+            const inPos = Number(data.virtualWallet.inPositionsSol ?? 0);
+            document.getElementById('paper-stat-balance').innerHTML = `${curSol.toFixed(2)} SOL ${inPos > 0 ? `<span class="text-[11px] text-slate-400 font-normal">(${inPos.toFixed(2)} in pos)</span>` : ''}`;
+          }
+        } else {
+          paperBanner.classList.add('hidden');
+        }
+
+        const previewList = document.getElementById('overview-positions-list');
+        if (open.length === 0) {
+          previewList.innerHTML = `
+            <div class="py-8 text-center text-slate-500 text-xs">
+              Belum ada posisi LP aktif. Bot memantau radar screening untuk sinyal entry.
+            </div>
+          `;
+        } else {
+          previewList.innerHTML = open.map(p => renderPositionCard(p, true)).join('');
+        }
+
+        const fullOpenContainer = document.getElementById('positions-open-container');
+        if (open.length === 0) {
+          fullOpenContainer.innerHTML = `
+            <div class="py-12 text-center rounded-xl bg-surface-card border border-surface-border">
+              <i data-lucide="layers" class="w-6 h-6 text-slate-600 mx-auto mb-2"></i>
+              <h4 class="text-xs font-semibold text-slate-300">Tidak ada posisi terbuka</h4>
+              <p class="text-xs text-slate-500 mt-1">Bot akan otomatis membuka posisi sesuai parameter modal dan filter yang Anda tetapkan.</p>
+            </div>
+          `;
+        } else {
+          fullOpenContainer.innerHTML = open.map(p => renderPositionCard(p, false)).join('');
+        }
+
+        const historyCont = document.getElementById('positions-history-container');
+        if (history.length === 0) {
+          historyCont.innerHTML = `
+            <div class="py-10 text-center text-slate-500 text-xs rounded-xl bg-surface-card border border-surface-border">
+              Belum ada riwayat penutupan posisi.
+            </div>
+          `;
+        } else {
+          historyCont.innerHTML = history.map(h => {
+            const pnlUsd = Number(h.pnlUsd ?? h.pnl_usd ?? h.close_pnl_usd ?? 0);
+            const pnlSol = Number(h.pnlSol ?? h.pnl_sol ?? 0);
+            const pnlPct = Number(h.pnlPct ?? h.pnl_pct ?? 0);
+            const feesSol = Number(h.totalFeesSol ?? h.total_fees_sol ?? 0);
+            const feesUsd = Number(h.totalFeesUsd ?? h.total_fees_usd ?? 0);
+            const depSol = Number(h.depositSol ?? h.deposit_sol ?? 0);
+            const depUsd = Number(h.depositUsd ?? h.deposit_usd ?? 0);
+            const isProfit = pnlUsd >= 0;
+            const pair = h.pair || h.pool_name || 'DLMM Pool';
+            const reason = h.closeReason || h.close_reason || 'Manual / Rule Close';
+            const rawTime = h.closedAt || h.closed_at;
+            let timeStr = '—';
+            if (rawTime) {
+              const d = new Date(rawTime);
+              timeStr = `${d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })} ${d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+            }
+            const poolAddress = h.pool || h.pool_address || '';
+            const posShort = (h.position || h.id || '').replace(/^paper-/, '').slice(0, 8);
+
+            return `
+              <div class="p-4 rounded-xl bg-surface-card border border-surface-border hover:border-slate-700/80 transition-colors text-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="space-y-1.5 flex-1 min-w-0">
+                  <div class="flex items-center flex-wrap gap-2">
+                    <span class="font-semibold text-white text-sm tracking-tight">${pair}</span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-full ${h.dry_run || h.is_paper ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'}">
+                      ${h.dry_run || h.is_paper ? 'SIMULASI' : 'LIVE'}
+                    </span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-full ${isProfit ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-rose-500/10 text-rose-400 border border-rose-500/25'}">
+                      ${isProfit ? 'PROFIT' : 'LOSS'}
+                    </span>
+                    ${poolAddress ? `
+                      <a href="https://app.meteora.ag/dlmm/${poolAddress}" target="_blank" rel="noopener noreferrer" class="text-[11px] text-blue-400 hover:text-blue-300 inline-flex items-center gap-1 font-mono transition-colors ml-1" title="Buka DLMM Pool di Meteora">
+                        <span>Pool: ${poolAddress.slice(0, 4)}...${poolAddress.slice(-4)}</span>
+                        <i data-lucide="external-link" class="w-3 h-3"></i>
+                      </a>
+                    ` : ''}
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
+                    <div>
+                      Alasan: <span class="text-slate-300 font-medium">${reason}</span>
+                    </div>
+                    ${depSol > 0 ? `
+                      <div>
+                        Modal: <span class="font-mono text-slate-300">${depSol.toFixed(3)} SOL</span> ${depUsd > 0 ? `<span class="text-slate-500 font-mono">($${depUsd.toFixed(2)})</span>` : ''}
+                      </div>
+                    ` : ''}
+                    ${feesSol > 0 || feesUsd > 0 ? `
+                      <div>
+                        Fee Terkumpul: <span class="font-mono text-emerald-400">+${feesSol.toFixed(4)} SOL</span> <span class="text-slate-500 font-mono">(+$${feesUsd.toFixed(2)})</span>
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+
+                <div class="flex items-center md:items-end justify-between md:justify-center md:flex-col shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-surface-border">
+                  <div class="text-left md:text-right">
+                    <div class="text-base font-bold font-mono ${isProfit ? 'text-emerald-400' : 'text-rose-400'}">
+                      ${isProfit ? '+' : ''}$${pnlUsd.toFixed(2)} <span class="text-xs font-normal">(${isProfit ? '+' : ''}${pnlPct.toFixed(2)}%)</span>
+                    </div>
+                    <div class="text-xs font-mono ${isProfit ? 'text-emerald-400/80' : 'text-rose-400/80'}">
+                      ${isProfit ? '+' : ''}${pnlSol.toFixed(4)} SOL
+                    </div>
+                  </div>
+                  <div class="text-[10px] text-slate-500 font-mono md:mt-1">
+                    Ditutup: ${timeStr}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+
+        lucide.createIcons();
+      } catch (err) {
+        console.error('Fetch positions error:', err);
+      }
+    }
+
+    function formatPrice(val) {
+      if (val == null || val === '') return '—';
+      const num = Number(val);
+      if (isNaN(num)) return '—';
+      if (num === 0) return '0.00';
+      if (num < 0.000001) return num.toExponential(3);
+      if (num < 0.001) return num.toFixed(6);
+      if (num < 1) return num.toFixed(4);
+      return num.toFixed(2);
+    }
+
+    function renderPositionCard(p, isCompact = false) {
+      const pnl = Number(p.pnl_usd ?? p.unrealized_pnl_usd ?? 0);
+      const pnlPct = Number(p.pnl_pct ?? p.unrealized_pnl_pct ?? 0);
+      const pnlSol = Number(p.pnl_sol ?? 0);
+      const isProfit = pnl >= 0;
+      const addr = p.position || p.address || '';
+      const poolAddr = p.pool || addr;
+      const poolName = p.pair || p.pool_name || p.name || 'Meteora DLMM Pool';
+      const feeUsd = Number(p.unclaimed_fees_usd ?? p.fee_usd ?? 0);
+      const feeSol = Number(p.unclaimed_fees_sol ?? p.fee_sol ?? 0);
+      const valUsd = Number(p.total_value_usd ?? p.value_usd ?? 0);
+      const valSol = Number(p.total_value_sol ?? 0);
+      const depSol = Number(p.deposit_sol ?? 0);
+      const depUsd = Number(p.deposit_usd ?? 0);
+      const inRange = p.in_range !== false;
+      const isDry = p.is_paper || p.dry_run || addr.startsWith('paper-');
+      const yield24h = p.fee_per_tvl_24h != null ? Number(p.fee_per_tvl_24h).toFixed(2) + '%' : '—';
+
+      // Bin & Range calculations
+      const lowerBin = Number(p.lower_bin ?? 0);
+      const upperBin = Number(p.upper_bin ?? 0);
+      const activeBin = Number(p.active_bin ?? p.activeBinId ?? lowerBin);
+      const totalBins = Math.max(1, upperBin - lowerBin);
+      const rawPct = ((activeBin - lowerBin) / totalBins) * 100;
+      const binPct = Math.max(0, Math.min(100, rawPct));
+      const minPrice = p.min_price != null ? p.min_price : p.entry_price;
+      const maxPrice = p.max_price != null ? p.max_price : p.entry_price;
+      const currPrice = p.current_price != null ? p.current_price : p.entry_price;
+
+      return `
+        <div class="p-4 rounded-xl bg-surface-card border border-surface-border space-y-3.5 hover:border-surface-borderLight transition">
+          
+          <!-- Top Row: Pool info, Badges & Action Buttons -->
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-surface-subtle border border-surface-border flex items-center justify-center font-mono text-[11px] font-semibold text-slate-300">
+                ${isDry ? 'DRY' : 'LIVE'}
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="text-xs font-semibold text-white tracking-wide">${poolName}</h4>
+                  <span class="text-[9px] font-mono px-1.5 py-0.2 rounded ${inRange ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25' : 'bg-rose-500/10 text-rose-300 border border-rose-500/25'}">
+                    ${inRange ? '🟢 In Range' : '🔴 Out of Range'}
+                  </span>
+                  <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-surface-subtle text-slate-400 border border-surface-border">
+                    Bin Step: ${p.bin_step ?? p.binStep ?? '—'} bps
+                  </span>
+                </div>
+                <div class="flex items-center gap-2 mt-0.5">
+                  <span class="text-[10px] font-mono text-slate-500">${addr.slice(0, 10)}...${addr.slice(-6)}</span>
+                  <span class="text-slate-600">•</span>
+                  <span class="text-[10px] font-mono text-slate-400">${p.age_minutes != null ? `${p.age_minutes}m aktif` : ''}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <div class="text-right">
+                <div class="font-mono font-semibold text-xs ${isProfit ? 'text-emerald-400' : 'text-rose-400'}">
+                  ${isProfit ? '+' : ''}$${pnl.toFixed(2)} (${isProfit ? '+' : ''}${pnlPct.toFixed(2)}%)
+                </div>
+                <div class="text-[10px] text-slate-400 font-mono">
+                  ${isProfit ? '+' : ''}${pnlSol.toFixed(4)} SOL
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button onclick="claimPositionFees('${addr}')" class="px-2.5 py-1 rounded bg-surface-subtle hover:bg-surface-hover border border-surface-border text-slate-200 text-xs font-medium active:scale-95 transition" title="Klaim akumulasi fee">
+                  Klaim
+                </button>
+                <button onclick="confirmClosePosition('${addr}', '${poolName}')" class="px-2.5 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-medium active:scale-95 transition flex items-center gap-1" title="Tutup posisi dan tarik likuiditas">
+                  <i data-lucide="power" class="w-3 h-3 text-rose-400"></i>
+                  <span>Tutup</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- RANGE BAR SECTION -->
+          <div class="p-3 rounded-lg bg-surface-base border border-surface-border space-y-2">
+            <div class="flex justify-between items-center text-[10px] font-mono text-slate-400">
+              <div class="flex items-center gap-1">
+                <span class="text-slate-500">Min:</span>
+                <span class="text-slate-200 font-medium">${formatPrice(minPrice)}</span>
+                <span class="text-slate-500 text-[9px]">[Bin ${lowerBin}]</span>
+              </div>
+              <div class="flex items-center gap-1.5 font-semibold ${inRange ? 'text-emerald-400' : 'text-rose-400'}">
+                <span class="w-1.5 h-1.5 rounded-full ${inRange ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}"></span>
+                <span>Curr: ${formatPrice(currPrice)}</span>
+                <span class="text-[9px] font-mono text-slate-400 font-normal">[Active: ${activeBin}]</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="text-slate-500">Max:</span>
+                <span class="text-slate-200 font-medium">${formatPrice(maxPrice)}</span>
+                <span class="text-slate-500 text-[9px]">[Bin ${upperBin}]</span>
+              </div>
+            </div>
+
+            <!-- Visual Range Track -->
+            <div class="relative w-full h-2 rounded-full bg-surface-subtle border border-surface-border overflow-hidden">
+              <div class="absolute top-0 bottom-0 left-0 bg-blue-500/25 border-r border-blue-400/50" style="width: ${binPct}%"></div>
+              <div class="absolute top-0 bottom-0 w-2.5 -ml-1 rounded-full ${inRange ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)]'}" style="left: ${binPct}%"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-[9px] font-mono text-slate-500">
+              <span>+${activeBin - lowerBin} bins dari bawah</span>
+              <span class="text-slate-400 font-medium">Rentang: ${totalBins} Bins</span>
+              <span>${upperBin - activeBin} bins menuju atas</span>
+            </div>
+          </div>
+
+          <!-- 4-GRID KEY METRICS (Modal, Nilai, Fee, Yield) -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
+            <div class="bg-surface-base p-2.5 rounded-lg border border-surface-border">
+              <span class="text-[9px] text-slate-400 block font-sans uppercase tracking-wider">Modal Masuk</span>
+              <span class="text-white font-medium">${depSol > 0 ? depSol.toFixed(4) : '—'} SOL</span>
+              <span class="text-[9px] text-slate-500 block">≈ $${depUsd.toFixed(2)}</span>
+            </div>
+            <div class="bg-surface-base p-2.5 rounded-lg border border-surface-border">
+              <span class="text-[9px] text-slate-400 block font-sans uppercase tracking-wider">Nilai Posisi</span>
+              <span class="text-slate-200 font-medium">${valSol > 0 ? valSol.toFixed(4) : '—'} SOL</span>
+              <span class="text-[9px] text-slate-500 block">≈ $${valUsd.toFixed(2)}</span>
+            </div>
+            <div class="bg-surface-base p-2.5 rounded-lg border border-surface-border">
+              <span class="text-[9px] text-slate-400 block font-sans uppercase tracking-wider">Fee Terkumpul</span>
+              <span class="text-emerald-400 font-medium">+${feeSol > 0 ? feeSol.toFixed(5) : '0.000'} SOL</span>
+              <span class="text-[9px] text-slate-500 block">≈ +$${feeUsd.toFixed(2)}</span>
+            </div>
+            <div class="bg-surface-base p-2.5 rounded-lg border border-surface-border">
+              <span class="text-[9px] text-slate-400 block font-sans uppercase tracking-wider">Yield Fee 24h</span>
+              <span class="text-cyan-300 font-medium">${yield24h}</span>
+              <span class="text-[9px] text-slate-500 block">Fee / TVL Ratio</span>
+            </div>
+          </div>
+
+          <!-- Bottom Meta & Meteora DLMM Link -->
+          <div class="flex justify-between items-center text-[10px] font-mono text-slate-400 pt-1 border-t border-surface-border">
+            <div class="flex items-center gap-3">
+              <span>Entry Px: <span class="text-slate-300">${formatPrice(p.entry_price)}</span></span>
+              <span class="text-slate-600">•</span>
+              <span>Active Bin: <span class="text-cyan-300 font-semibold">${activeBin}</span></span>
+            </div>
+            <!-- Meteora DLMM App Link -->
+            <a href="https://app.meteora.ag/dlmm/${poolAddr}" target="_blank" class="text-blue-400 hover:text-blue-300 font-medium hover:underline flex items-center gap-1 transition" title="Buka pool di Meteora DLMM App">
+              <span>Meteora DLMM</span>
+              <i data-lucide="external-link" class="w-3 h-3 text-blue-400"></i>
+            </a>
+          </div>
+
+        </div>
+      `;
+    }
+
+    async function fetchScreening() {
+      try {
+        const res = await fetch('/api/screening');
+        const data = await res.json();
+        const tbody = document.getElementById('screening-table-body');
+        const candidates = data.candidates || [];
+
+        if (candidates.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-500 font-sans">Belum ada kandidat pool yang lolos filter. Klik "Scan Sekarang" untuk memindai.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = candidates.map(c => `
+          <tr class="hover:bg-surface-subtle transition-colors">
+            <td class="p-3">
+              <span class="font-medium text-white font-sans">${c.name || 'Unknown'}</span>
+              <span class="text-[10px] text-slate-500 block font-mono">${(c.address || '').slice(0, 8)}...</span>
+            </td>
+            <td class="p-3">
+              <span class="px-2 py-0.5 rounded bg-surface-base text-slate-300 font-mono text-xs border border-surface-border">
+                ${c.degenScore != null ? Number(c.degenScore).toFixed(1) : '—'}
+              </span>
+            </td>
+            <td class="p-3 text-white font-medium">$${formatNum(c.tvl)}</td>
+            <td class="p-3 text-slate-300">$${formatNum(c.volume)}</td>
+            <td class="p-3 text-emerald-400 font-medium">${c.fee_active_tvl_ratio != null ? Number(c.fee_active_tvl_ratio).toFixed(2) + '%' : '—'}</td>
+            <td class="p-3 text-slate-300">${c.bin_step || '—'} bps</td>
+            <td class="p-3 text-right">
+              <div class="flex items-center justify-end gap-1.5">
+                <button onclick="deployPaperPool('${c.pool || c.address}', '${c.name || 'Pool'}')" class="px-2.5 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 font-medium text-[11px] inline-flex items-center gap-1 active:scale-95 transition" title="Buka posisi simulasi paper pada pool ini">
+                  <i data-lucide="zap" class="w-3 h-3 text-amber-400"></i> Simulasi LP
+                </button>
+                <a href="https://app.meteora.ag/dlmm/${c.pool || c.address}" target="_blank" class="px-2 py-1 rounded bg-surface-subtle hover:bg-surface-hover text-slate-300 font-medium text-[11px] border border-surface-border inline-flex items-center gap-1 transition">
+                  Meteora <i data-lucide="external-link" class="w-3 h-3 text-slate-400"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+
+        lucide.createIcons();
+      } catch (err) {
+        console.error('Fetch screening error:', err);
+      }
+    }
+
+    async function deployPaperPool(poolAddress, poolName) {
+      try {
+        showToast(`Membuka posisi simulasi pada ${poolName}...`, false);
+        const res = await fetch("/api/paper/deploy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pool_address: poolAddress, pool_name: poolName })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`✓ Berhasil membuka posisi simulasi di ${poolName}!`, false);
+          switchTab("positions");
+          fetchPositions();
+        } else {
+          showToast(`Gagal: ${data.error || "Gagal deploy"}`, true);
+        }
+      } catch (err) {
+        showToast(`Error: ${err.message}`, true);
+      }
+    }
+
+    async function claimPositionFees(positionAddr) {
+      try {
+        showToast("Mengklaim fee posisi...", false);
+        const res = await fetch("/api/positions/claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ position: positionAddr })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast("✓ Fee berhasil diklaim!", false);
+          fetchPositions();
+        } else {
+          showToast(`Gagal klaim: ${data.error}`, true);
+        }
+      } catch (err) {
+        showToast(`Error: ${err.message}`, true);
+      }
+    }
+
+    async function resetPaperSimulation() {
+      if (!confirm("Reset seluruh data simulasi paper trading ke kondisi awal (10.0 SOL)?")) return;
+      try {
+        const res = await fetch("/api/paper/reset", { method: "POST" });
+        const data = await res.json();
+        if (data.ok) {
+          showToast("✓ Data simulasi berhasil di-reset!", false);
+          fetchPositions();
+        }
+      } catch (err) {
+        showToast(`Error: ${err.message}`, true);
+      }
+    }
+
+    function formatNum(n) {
+      const num = Number(n || 0);
+      if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+      if (num >= 1e3) return (num / 1e3).toFixed(1) + 'k';
+      return num.toFixed(0);
+    }
+
+    async function fetchLogs() {
+      try {
+        const res = await fetch('/api/logs');
+        const data = await res.json();
+        if (!data.ok) return;
+
+        const logs = data.logs || [];
+        
+        const overviewLogs = document.getElementById('overview-recent-logs');
+        if (logs.length === 0) {
+          overviewLogs.innerHTML = `<span class="text-slate-500">Belum ada aktivitas.</span>`;
+        } else {
+          overviewLogs.innerHTML = logs.slice(0, 6).map(l => `
+            <div class="py-0.5 border-b border-surface-border flex items-start gap-1.5 truncate">
+              <span class="text-slate-500 shrink-0">›</span>
+              <span class="truncate">${escapeHtml(l.text || l)}</span>
+            </div>
+          `).join('');
+        }
+
+        const fullLogs = document.getElementById('full-logs-container');
+        fullLogs.innerHTML = logs.map(l => `
+          <div class="py-0.5 border-b border-surface-border flex items-start gap-2 hover:bg-surface-subtle">
+            <span class="text-slate-500 shrink-0 select-none">${l.time ? new Date(l.time).toLocaleTimeString() : '›'}</span>
+            <span class="${getLogLevelClass(l.text || l)}">${escapeHtml(l.text || l)}</span>
+          </div>
+        `).join('');
+
+      } catch (err) {
+        console.error('Fetch logs error:', err);
+      }
+    }
+
+    function getLogLevelClass(txt) {
+      const s = String(txt).toLowerCase();
+      if (s.includes('error') || s.includes('fail') || s.includes('failed')) return 'text-rose-400';
+      if (s.includes('warn')) return 'text-amber-400';
+      if (s.includes('mode') || s.includes('switch') || s.includes('open')) return 'text-blue-300 font-medium';
+      if (s.includes('win') || s.includes('profit') || s.includes('online')) return 'text-emerald-400';
+      return 'text-slate-300';
+    }
+
+    function escapeHtml(t) {
+      return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+        if (!data.ok) return;
+
+        cachedConfig = data.config || {};
+        const isDryRun = data.dryRun;
+
+        const rDry = document.getElementById('radio-dryrun');
+        const rLive = document.getElementById('radio-live');
+        const cardDry = document.getElementById('card-mode-dryrun');
+        const cardLive = document.getElementById('card-mode-live');
+        const badgeMode = document.getElementById('settings-current-mode-badge');
+
+        if (isDryRun) {
+          rDry.checked = true;
+          rLive.checked = false;
+          cardDry.className = 'relative flex flex-col p-4 rounded-xl border border-amber-500/50 bg-amber-500/5 cursor-pointer transition';
+          cardLive.className = 'relative flex flex-col p-4 rounded-xl border border-surface-border bg-surface-base cursor-pointer transition hover:border-surface-borderLight';
+          badgeMode.className = 'px-2.5 py-1 rounded text-xs font-mono border bg-amber-500/10 text-amber-300 border-amber-500/30 inline-flex items-center gap-1.5';
+          badgeMode.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Mode: DRY RUN';
+        } else {
+          rDry.checked = false;
+          rLive.checked = true;
+          cardLive.className = 'relative flex flex-col p-4 rounded-xl border border-rose-500/50 bg-rose-500/5 cursor-pointer transition';
+          cardDry.className = 'relative flex flex-col p-4 rounded-xl border border-surface-border bg-surface-base cursor-pointer transition hover:border-surface-borderLight';
+          badgeMode.className = 'px-2.5 py-1 rounded text-xs font-mono border bg-rose-500/10 text-rose-300 border-rose-500/30 inline-flex items-center gap-1.5';
+          badgeMode.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span> Mode: LIVE TRADING';
+        }
+
+        const isEnableLlm = data.enableLlm ?? (cachedConfig.enableLlm !== false);
+        const rLlm = document.getElementById('radio-engine-llm');
+        const rMech = document.getElementById('radio-engine-mech');
+        const cardLlm = document.getElementById('card-engine-llm');
+        const cardMech = document.getElementById('card-engine-mech');
+        const badgeEngine = document.getElementById('settings-current-engine-badge');
+
+        if (rLlm && rMech) {
+          if (isEnableLlm) {
+            rLlm.checked = true;
+            rMech.checked = false;
+            cardLlm.className = 'relative flex flex-col p-4 rounded-xl border border-blue-500/50 bg-blue-500/5 cursor-pointer transition';
+            cardMech.className = 'relative flex flex-col p-4 rounded-xl border border-surface-border bg-surface-base cursor-pointer transition hover:border-surface-borderLight';
+            badgeEngine.className = 'px-2.5 py-1 rounded text-xs font-mono border bg-blue-500/10 text-blue-300 border-blue-500/30 inline-flex items-center gap-1.5';
+            badgeEngine.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Engine: LLM AI';
+          } else {
+            rLlm.checked = false;
+            rMech.checked = true;
+            cardMech.className = 'relative flex flex-col p-4 rounded-xl border border-emerald-500/50 bg-emerald-500/5 cursor-pointer transition';
+            cardLlm.className = 'relative flex flex-col p-4 rounded-xl border border-surface-border bg-surface-base cursor-pointer transition hover:border-surface-borderLight';
+            badgeEngine.className = 'px-2.5 py-1 rounded text-xs font-mono border bg-emerald-500/10 text-emerald-300 border-emerald-500/30 inline-flex items-center gap-1.5';
+            badgeEngine.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Engine: MEKANIKAL (NO LLM)';
+          }
+        }
+
+        const c = cachedConfig;
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+
+        setVal('cfg-deployAmountSol', c.deployAmountSol ?? 0.3);
+        setVal('cfg-maxPositions', c.maxPositions ?? 2);
+        setVal('cfg-gasReserve', c.gasReserve ?? 0.05);
+        setVal('cfg-strategy', c.strategy ?? 'spot');
+
+        setVal('cfg-takeProfitPct', c.takeProfitPct ?? 8);
+        setVal('cfg-stopLossPct', c.stopLossPct ?? -15);
+        setVal('cfg-trailingTakeProfit', String(c.trailingTakeProfit ?? true));
+        setVal('cfg-trailingTriggerPct', c.trailingTriggerPct ?? 3);
+        setVal('cfg-trailingDropPct', c.trailingDropPct ?? 1.5);
+
+        setVal('cfg-minTvl', c.minTvl ?? 1000);
+        setVal('cfg-maxTvl', c.maxTvl ?? 50000);
+        setVal('cfg-minVolume', c.minVolume ?? 500);
+        setVal('cfg-minFeeActiveTvlRatio', c.minFeeActiveTvlRatio ?? 0.1);
+        setVal('cfg-minOrganic', c.minOrganic ?? 48);
+        setVal('cfg-minHolders', c.minHolders ?? 300);
+        setVal('cfg-minBinStep', c.minBinStep ?? 80);
+        setVal('cfg-maxBinStep', c.maxBinStep ?? 200);
+        setVal('cfg-timeframe', c.timeframe ?? '5m');
+
+        setVal('cfg-managementIntervalMin', c.managementIntervalMin ?? 2);
+        setVal('cfg-screeningIntervalMin', c.screeningIntervalMin ?? 5);
+
+      } catch (err) {
+        showToast('Gagal memuat setelan: ' + err.message, true);
+      }
+    }
+
+    function onModeRadioChange(isDryRun) {
+      const cardDry = document.getElementById('card-mode-dryrun');
+      const cardLive = document.getElementById('card-mode-live');
+      if (isDryRun) {
+        cardDry.className = 'relative flex flex-col p-4 rounded-xl border border-amber-500/50 bg-amber-500/5 cursor-pointer transition';
+        cardLive.className = 'relative flex flex-col p-4 rounded-xl border border-surface-border bg-surface-base cursor-pointer transition hover:border-surface-borderLight';
+      } else {
+        cardLive.className = 'relative flex flex-col p-4 rounded-xl border border-rose-500/50 bg-rose-500/5 cursor-pointer transition';
+        cardDry.className = 'relative flex flex-col p-4 rounded-xl border border-surface-border bg-surface-base cursor-pointer transition hover:border-surface-borderLight';
+      }
+    }
+
+    function onEngineRadioChange(isLlm) {
+      const cardLlm = document.getElementById('card-engine-llm');
+      const cardMech = document.getElementById('card-engine-mech');
+      const badgeEngine = document.getElementById('settings-current-engine-badge');
+      if (isLlm) {
+        cardLlm.className = 'relative flex flex-col p-4 rounded-xl border border-blue-500/50 bg-blue-500/5 cursor-pointer transition';
+        cardMech.className = 'relative flex flex-col p-4 rounded-xl border border-surface-border bg-surface-base cursor-pointer transition hover:border-surface-borderLight';
+        if (badgeEngine) {
+          badgeEngine.className = 'px-2.5 py-1 rounded text-xs font-mono border bg-blue-500/10 text-blue-300 border-blue-500/30 inline-flex items-center gap-1.5';
+          badgeEngine.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Engine: LLM AI';
+        }
+      } else {
+        cardMech.className = 'relative flex flex-col p-4 rounded-xl border border-emerald-500/50 bg-emerald-500/5 cursor-pointer transition';
+        cardLlm.className = 'relative flex flex-col p-4 rounded-xl border border-surface-border bg-surface-base cursor-pointer transition hover:border-surface-borderLight';
+        if (badgeEngine) {
+          badgeEngine.className = 'px-2.5 py-1 rounded text-xs font-mono border bg-emerald-500/10 text-emerald-300 border-emerald-500/30 inline-flex items-center gap-1.5';
+          badgeEngine.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Engine: MEKANIKAL (NO LLM)';
+        }
+      }
+    }
+
+    async function saveSettings(e) {
+      if (e) e.preventDefault();
+      const btn = document.getElementById('btn-save-settings');
+      btn.disabled = true;
+      btn.innerHTML = `<span class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Menyimpan...`;
+
+      try {
+        const form = document.getElementById('settings-form');
+        const formData = new FormData(form);
+        const payload = {};
+        for (const [key, value] of formData.entries()) {
+          payload[key] = value;
+        }
+
+        const isDryRun = document.getElementById('radio-dryrun').checked;
+        payload.dryRun = isDryRun;
+
+        const rLlm = document.getElementById('radio-engine-llm');
+        if (rLlm) {
+          payload.enableLlm = rLlm.checked;
+        }
+
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`✓ Setelan berhasil disimpan! Mode sekarang: ${data.mode}`, false);
+          loadSettings();
+          fetchStatus();
+        } else {
+          showToast(`Gagal menyimpan: ${data.error}`, true);
+        }
+      } catch (err) {
+        showToast(`Error: ${err.message}`, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i><span>Simpan Semua Setelan</span>`;
+        lucide.createIcons();
+      }
+    }
+
+    async function triggerScreening() {
+      showToast('Memulai screening pool...', false);
+      try {
+        const res = await fetch('/api/trigger/screen', { method: 'POST' });
+        const d = await res.json();
+        if (d.ok) showToast('✓ Siklus screening dipicu di background.', false);
+      } catch (e) {
+        showToast('Gagal memicu screening: ' + e.message, true);
+      }
+    }
+
+    async function triggerManagement() {
+      showToast('Memulai monitoring posisi...', false);
+      try {
+        const res = await fetch('/api/trigger/manage', { method: 'POST' });
+        const d = await res.json();
+        if (d.ok) showToast('✓ Siklus management dipicu di background.', false);
+      } catch (e) {
+        showToast('Gagal memicu management: ' + e.message, true);
+      }
+    }
+
+    async function toggleCronState() {
+      const action = cronIsRunning ? 'pause' : 'resume';
+      try {
+        const res = await fetch('/api/control/cron', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action })
+        });
+        const d = await res.json();
+        if (d.ok) {
+          showToast(`✓ Siklus otomatis di-${action === 'pause' ? 'jeda' : 'lanjutkan'}`, false);
+          fetchStatus();
+        }
+      } catch (e) {
+        showToast('Gagal mengubah status cron: ' + e.message, true);
+      }
+    }
+
+    function confirmClosePosition(address, name) {
+      const modal = document.getElementById('modal-container');
+      modal.innerHTML = `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div class="w-full max-w-sm rounded-xl bg-surface-card border border-surface-border p-5 shadow-2xl space-y-4">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                <i data-lucide="power" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="font-semibold text-sm text-white">Tutup Posisi LP?</h3>
+                <p class="text-[11px] text-slate-400">Tarik likuiditas dan klaim akumulasi fee</p>
+              </div>
+            </div>
+            <div class="p-3 rounded-lg bg-surface-base border border-surface-border text-xs">
+              <span class="text-slate-400 block text-[10px] uppercase font-mono tracking-wider">Pool</span>
+              <span class="font-medium text-white block truncate">${name}</span>
+              <span class="font-mono text-slate-500 text-[10px] mt-0.5 block truncate">${address}</span>
+            </div>
+            <div class="flex gap-2 pt-1">
+              <button type="button" onclick="closeModal()" class="flex-1 py-2 rounded-lg bg-surface-subtle hover:bg-surface-hover border border-surface-border text-slate-300 font-medium text-xs transition">
+                Batal
+              </button>
+              <button type="button" onclick="executeClosePosition('${address}')" class="flex-1 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition">
+                Tutup Posisi
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+    }
+
+    async function executeClosePosition(address) {
+      closeModal();
+      showToast('Mengirim transaksi penutupan...', false);
+      try {
+        const res = await fetch('/api/positions/close', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ position: address })
+        });
+        const d = await res.json();
+        if (d.ok) {
+          showToast('✓ Posisi berhasil ditutup!', false);
+          fetchPositions();
+          fetchStatus();
+        } else {
+          showToast(`Gagal: ${d.error}`, true);
+        }
+      } catch (e) {
+        showToast(`Error: ${e.message}`, true);
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('modal-container').innerHTML = '';
+    }
+
+    function showToast(message, isError = false) {
+      const cont = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `px-3.5 py-2.5 rounded-lg border text-xs font-medium shadow-lg flex items-center justify-between gap-3 transition-all transform duration-200 pointer-events-auto ${
+        isError ? 'bg-rose-950/90 border-rose-800 text-rose-200' : 'bg-surface-card border-surface-borderLight text-slate-200'
+      }`;
+      toast.innerHTML = `
+        <div class="flex items-center gap-2">
+          <span>${isError ? '✕' : '✓'}</span>
+          <span>${message}</span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white text-xs">✕</button>
+      `;
+      cont.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 250);
+      }, 4000);
+    }
+  </script>
+</body>
+</html>

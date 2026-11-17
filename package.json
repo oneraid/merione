@@ -1,5 +1,5 @@
 {
-  "name": "dlmm-agent",
+  "name": "Merione",
   "version": "1.0.0",
   "type": "module",
   "description": "Autonomous DLMM LP agent for Meteora on Solana",
@@ -12,8 +12,8 @@
     "env:encrypt": "node scripts/envrypt.js encrypt",
     "start": "node index.js",
     "pm2:start": "pm2 start ecosystem.config.cjs",
-    "pm2:restart": "pm2 restart meridian --update-env",
-    "pm2:logs": "pm2 logs meridian --lines 100",
+    "pm2:restart": "pm2 restart merione --update-env",
+    "pm2:logs": "pm2 logs merione --lines 100",
     "dev": "DRY_RUN=true node index.js",
     "test": "npm run test:syntax",
     "test:syntax": "find . -path ./node_modules -prune -o -name '*.js' -exec node --check {} \\;",
@@ -28,6 +28,7 @@
     "bn.js": "^5.2.1",
     "bs58": "^5.0.0",
     "dotenv": "^17.3.1",
+    "express": "^5.3.0",
     "jsonrepair": "^3.13.3",
     "node-cron": "^3.0.3",
     "openai": "^4.73.0"

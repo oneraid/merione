@@ -29,6 +29,7 @@ import { normalizeMint } from "./wallet.js";
 import { appendDecision } from "../decision-log.js";
 import { getAndClearStagedSignals } from "../signal-tracker.js";
 import { computePositions, fetchDlmmPnlForPool } from "./pnl.js";
+import { openPaperPosition, closePaperPosition, claimPaperFees, getPaperPositions } from "../paper.js";
 
 // ─── Lazy SDK loader ───────────────────────────────────────────
 // @meteora-ag/dlmm → @coral-xyz/anchor uses CJS directory imports
@@ -689,21 +690,15 @@ export async function deployPosition({
   }
 
   if (process.env.DRY_RUN === "true") {
-    return {
-      dry_run: true,
-      would_deploy: {
-        pool_address,
-        strategy: activeStrategy,
-        bins_below: activeBinsBelow,
-        bins_above: activeBinsAbove,
-        downside_pct: downside_pct ?? null,
-        upside_pct: upside_pct ?? null,
-        amount_x: finalAmountX,
-        amount_y: finalAmountY,
-        wide_range: totalBins > 69,
-      },
-      message: "DRY RUN — no transaction sent",
-    };
+    return await openPaperPosition({
+      pool_address,
+      amount_sol: finalAmountY,
+      strategy: activeStrategy,
+      bins_below: activeBinsBelow,
+      bins_above: activeBinsAbove,
+      pool_name,
+      source: "Agent (Screener)"
+    });
   }
 
   const isWideRange = totalBins > 69;
@@ -1251,6 +1246,16 @@ async function fetchRawOpenPositionsFromMeridian({ walletAddress, agentId }) {
 
 // ─── Get My Positions ──────────────────────────────────────────
 export async function getMyPositions({ force = false, silent = false, wallet_address = null } = {}) {
+  if (process.env.DRY_RUN === "true") {
+    const paperPositions = await getPaperPositions();
+    return {
+      wallet: "simulated-paper-wallet",
+      total_positions: paperPositions.length,
+      positions: paperPositions,
+      dry_run: true
+    };
+  }
+
   let walletOverride = null;
   try {
     walletOverride = wallet_address ? new PublicKey(wallet_address).toString() : null;
@@ -1362,6 +1367,8 @@ export async function getMyPositions({ force = false, silent = false, wallet_add
           lower_bin:          lowerBin,
           upper_bin:          upperBin,
           active_bin:         activeBin,
+          bin_step:           tracked?.bin_step ?? null,
+          binStep:            tracked?.bin_step ?? null,
           in_range:           binData ? !binData.isOutOfRange : !isOOR,
           unclaimed_fees_usd: lpData
             ? Math.round((
@@ -1564,8 +1571,8 @@ export async function searchPools({ query, limit = 10 }) {
 // ─── Claim Fees ────────────────────────────────────────────────
 export async function claimFees({ position_address }) {
   position_address = normalizeMint(position_address);
-  if (process.env.DRY_RUN === "true") {
-    return { dry_run: true, would_claim: position_address, message: "DRY RUN — no transaction sent" };
+  if (position_address.startsWith("paper-") || process.env.DRY_RUN === "true") {
+    return await claimPaperFees(position_address);
   }
 
   const tracked = getTrackedPosition(position_address);
@@ -1610,8 +1617,8 @@ export async function claimFees({ position_address }) {
 // ─── Close Position ────────────────────────────────────────────
 export async function closePosition({ position_address, reason }) {
   position_address = normalizeMint(position_address);
-  if (process.env.DRY_RUN === "true") {
-    return { dry_run: true, would_close: position_address, message: "DRY RUN — no transaction sent" };
+  if (position_address.startsWith("paper-") || process.env.DRY_RUN === "true") {
+    return await closePaperPosition(position_address, reason);
   }
 
   const tracked = getTrackedPosition(position_address);
